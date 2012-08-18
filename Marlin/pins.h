@@ -267,6 +267,10 @@
 #define Z_MIN_PIN          18
 #define Z_MAX_PIN          19
 
+#define Z2_STEP_PIN        36
+#define Z2_DIR_PIN         34
+#define Z2_ENABLE_PIN      30
+
 #define E0_STEP_PIN        26
 #define E0_DIR_PIN         28
 #define E0_ENABLE_PIN      24
@@ -554,7 +558,10 @@
 * Sanguinololu pin assignment
 *
 ****************************************************************************************/
-#if MOTHERBOARD == 62
+#if MOTHERBOARD == 63
+#define MELZI
+#endif
+#if MOTHERBOARD == 62 || MOTHERBOARD == 63
 #undef MOTHERBOARD
 #define MOTHERBOARD 6
 #define SANGUINOLOLU_V_1_2 
@@ -569,18 +576,33 @@
 
 #define X_STEP_PIN         15
 #define X_DIR_PIN          21
-#define X_MIN_PIN          18
-#define X_MAX_PIN           -1
+#if X_HOME_DIR < 0
+# define X_MIN_PIN          18 
+# define X_MAX_PIN          -1
+#else
+# define X_MIN_PIN          -1
+# define X_MAX_PIN          18
+#endif
 
 #define Y_STEP_PIN         22
 #define Y_DIR_PIN          23
-#define Y_MIN_PIN          19
-#define Y_MAX_PIN          -1
+#if Y_HOME_DIR < 0
+# define Y_MIN_PIN          19 
+# define Y_MAX_PIN          -1
+#else
+# define Y_MIN_PIN          -1
+# define Y_MAX_PIN          19
+#endif
 
 #define Z_STEP_PIN         3
 #define Z_DIR_PIN          2
-#define Z_MIN_PIN          20
-#define Z_MAX_PIN          -1
+#if Z_HOME_DIR < 0
+# define Z_MIN_PIN          20 
+# define Z_MAX_PIN          -1
+#else
+# define Z_MIN_PIN          -1
+# define Z_MAX_PIN          20
+#endif
 
 #define E0_STEP_PIN         1
 #define E0_DIR_PIN          0
@@ -588,6 +610,11 @@
 #define LED_PIN            -1
 
 #define FAN_PIN            -1 
+
+#ifdef MELZI
+#define LED_PIN            28
+#define FAN_PIN            4
+#endif
 
 #define PS_ON_PIN          -1
 #define KILL_PIN           -1
@@ -620,6 +647,10 @@
 #define TEMP_BED_PIN        6   // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!! (pin 34 bed)
 #define SDPOWER            -1
 #define SDSS               31
+
+#ifdef MELZI
+#define SDSS               24
+#endif
 
 #endif
 
@@ -672,7 +703,7 @@
 
 #define E1_STEP_PIN         49
 #define E1_DIR_PIN          47
-#define E1_ENABLE_PIN       51
+#define E1_ENABLE_PIN       48
 
 #define SDPOWER            -1
 #define SDSS               53
@@ -729,10 +760,18 @@
     #define LCD_PINS_D7 19
     
     //encoder rotation values
-    #define encrot0 0
-    #define encrot1 2
-    #define encrot2 3
-    #define encrot3 1
+    #ifndef ULTIMAKERCONTROLLER
+     #define encrot0 0
+     #define encrot1 2
+     #define encrot2 3
+     #define encrot3 1
+    #else
+     #define encrot0 0
+     #define encrot1 1
+     #define encrot2 3
+     #define encrot3 2
+
+    #endif
 
     #define SDCARDDETECT -1
     //bits in the shift register that carry the buttons for:

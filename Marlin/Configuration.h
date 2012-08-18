@@ -1,5 +1,5 @@
-#ifndef __CONFIGURATION_H
-#define __CONFIGURATION_H
+#ifndef CONFIGURATION_H
+#define CONFIGURATION_H
 
 // This configurtion file contains the basic settings.
 // Advanced settings can be found in Configuration_adv.h 
@@ -26,6 +26,7 @@
 // Gen6 = 5
 // Gen6 deluxe = 51
 // Sanguinololu 1.2 and above = 62
+// Melzi = 63
 // Ultimaker = 7
 // Teensylu = 8
 // Gen3+ =9
@@ -34,21 +35,31 @@
 #define MOTHERBOARD 33
 #endif
 
+
+
 //===========================================================================
 //=============================Thermal Settings  ============================
 //===========================================================================
-
+//
+//--NORMAL IS 4.7kohm PULLUP!-- 1kohm pullup can be used on hotend sensor, using correct resistor and table
+//
 //// Temperature sensor settings:
 // -2 is thermocouple with MAX6675 (only for sensor 0)
 // -1 is thermocouple with AD595
 // 0 is not used
-// 1 is 100k thermistor
-// 2 is 200k thermistor
-// 3 is mendel-parts thermistor
+// 1 is 100k thermistor - best choice for EPCOS 100k (4.7k pullup)
+// 2 is 200k thermistor - ATC Semitec 204GT-2 (4.7k pullup)
+// 3 is mendel-parts thermistor (4.7k pullup)
 // 4 is 10k thermistor !! do not use it for a hotend. It gives bad resolution at high temp. !!
-// 5 is ParCan supplied 104GT-2 100K
-// 6 is EPCOS 100k
-// 7 is 100k Honeywell thermistor 135-104LAG-J01
+// 5 is 100K thermistor - ATC Semitec 104GT-2 (Used in ParCan) (4.7k pullup)
+// 6 is 100k EPCOS - Not as accurate as table 1 (created using a fluke thermocouple) (4.7k pullup)
+// 7 is 100k Honeywell thermistor 135-104LAG-J01 (4.7k pullup)
+//
+//    1k ohm pullup tables - This is not normal, you would have to have changed out your 4.7k for 1k 
+//                          (but gives greater accuracy and more stable PID)
+// 51 is 100k thermistor - EPCOS (1k pullup)
+// 52 is 200k thermistor - ATC Semitec 204GT-2 (1k pullup)
+// 55 is 100k thermistor - ATC Semitec 104GT-2 (Used in ParCan) (1k pullup)
 
 #define TEMP_SENSOR_0 1
 #define TEMP_SENSOR_1 0
@@ -58,6 +69,7 @@
 // Actual temperature must be close to target for this long before M109 returns success
 #define TEMP_RESIDENCY_TIME 10	// (seconds)
 #define TEMP_HYSTERESIS 3       // (degC) range of +/- temperatures considered "close" to the target one
+#define TEMP_WINDOW     1       // (degC) Window around target to start the recidency timer x degC early.
 
 // The minimal temperature defines the temperature below which the heater will not be enabled It is used
 // to check that the wiring to the thermistor is not broken. 
@@ -75,6 +87,10 @@
 #define HEATER_2_MAXTEMP 275
 #define BED_MAXTEMP 150
 
+// If your bed has low resistance e.g. .6 ohm and throws the fuse you can duty cycle it to reduce the
+// average current. The value should be an integer and the heat bed will be turned on for 1 interval of
+// HEATER_BED_DUTY_CYCLE_DIVIDER intervals.
+//#define HEATER_BED_DUTY_CYCLE_DIVIDER 4
 
 // PID settings:
 // Comment the following line to disable PID and enable bang-bang.
@@ -107,6 +123,9 @@
 //this prevents dangerous Extruder moves, i.e. if the temperature is under the limit
 //can be software-disabled for whatever purposes by
 //define PREVENT_DANGEROUS_EXTRUDE
+//if PREVENT_DANGEROUS_EXTRUDE is on, you can still disable (uncomment) very long bits of extrusion separately.
+//define PREVENT_LENGTHY_EXTRUDE
+
 #define EXTRUDE_MINTEMP 170
 #define EXTRUDE_MAXLENGTH (X_MAX_LENGTH+Y_MAX_LENGTH) //prevent extrusion of very large distances.
 
@@ -114,14 +133,36 @@
 //=============================Mechanical Settings===========================
 //===========================================================================
 
-// Endstop Settings
+// Uncomment the following line to enable CoreXY kinematics
+// #define COREXY
+
+// corse Endstop Settings
 #define ENDSTOPPULLUPS // Comment this out (using // at the start of the line) to disable the endstop pullup resistors
+
+#ifndef ENDSTOPPULLUPS
+  // fine Enstop settings: Individual Pullups. will be ignord if ENDSTOPPULLUPS is defined
+  #define ENDSTOPPULLUP_XMAX
+  #define ENDSTOPPULLUP_YMAX
+  #define ENDSTOPPULLUP_ZMAX
+  #define ENDSTOPPULLUP_XMIN
+  #define ENDSTOPPULLUP_YMIN
+  //#define ENDSTOPPULLUP_ZMIN
+#endif
+
+#ifdef ENDSTOPPULLUPS
+  #define ENDSTOPPULLUP_XMAX
+  #define ENDSTOPPULLUP_YMAX
+  #define ENDSTOPPULLUP_ZMAX
+  #define ENDSTOPPULLUP_XMIN
+  #define ENDSTOPPULLUP_YMIN
+  #define ENDSTOPPULLUP_ZMIN
+#endif
 
 // The pullups are needed if you directly connect a mechanical endswitch between the signal and ground pins.
 const bool X_ENDSTOPS_INVERTING = false; // set to true to invert the logic of the endstops. 
 const bool Y_ENDSTOPS_INVERTING = false; // set to true to invert the logic of the endstops. 
 const bool Z_ENDSTOPS_INVERTING = false; // set to true to invert the logic of the endstops. 
-#define DISABLE_MAX_ENDSTOPS
+//define DISABLE_MAX_ENDSTOPS
 
 // For Inverting Stepper Enable Pins (Active Low) use 0, Non Inverting (Active High) use 1
 #define X_ENABLE_ON 0
@@ -150,9 +191,17 @@ const bool Z_ENDSTOPS_INVERTING = false; // set to true to invert the logic of t
 
 #define min_software_endstops false //If true, axis won't move to coordinates less than HOME_POS.
 #define max_software_endstops true  //If true, axis won't move to coordinates greater than the defined lengths below.
-#define X_MAX_LENGTH 160 //205
-#define Y_MAX_LENGTH 180 //205
-#define Z_MAX_LENGTH 80  //200
+// Travel limits after homing
+#define X_MAX_POS 160
+#define X_MIN_POS 0
+#define Y_MAX_POS 160
+#define Y_MIN_POS 0
+#define Z_MAX_POS 80
+#define Z_MIN_POS 0
+
+#define X_MAX_LENGTH (X_MAX_POS - X_MIN_POS)
+#define Y_MAX_LENGTH (Y_MAX_POS - Y_MIN_POS)
+#define Z_MAX_LENGTH (Z_MAX_POS - Z_MIN_POS)
 
 // The position of the homing switches. Use MAX_LENGTH * -0.5 if the center should be 0, 0, 0
 #define X_HOME_POS 0
@@ -196,7 +245,16 @@ const bool Z_ENDSTOPS_INVERTING = false; // set to true to invert the logic of t
 //#define ULTRA_LCD  //general lcd support, also 16x2
 //#define SDSUPPORT // Enable SD Card Support in Hardware Console
 
-//#define ULTIPANEL
+//#define ULTIMAKERCONTROLLER //as available from the ultimaker online store.
+//#define ULTIPANEL  //the ultipanel as on thingiverse
+
+
+#ifdef ULTIMAKERCONTROLLER    //automatic expansion
+ #define ULTIPANEL
+ #define NEWPANEL
+#endif 
+ 
+
 #ifdef ULTIPANEL
 //  #define NEWPANEL  //enable this if you have a click-encoder panel
   #define SDSUPPORT
@@ -219,6 +277,9 @@ const bool Z_ENDSTOPS_INVERTING = false; // set to true to invert the logic of t
     #define LCD_HEIGHT 2    
   #endif
 #endif
+
+// Increase the FAN pwm frequency. Removes the PWM noise but increases heating in the FET/Arduino
+//#define FAST_PWM_FAN
 
 // M240  Triggers a camera by emulating a Canon RC-1 Remote
 // Data from: http://www.doc-diy.net/photo/rc-1_hacked/

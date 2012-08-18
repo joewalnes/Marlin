@@ -31,6 +31,7 @@ Features:
 *   Full endstop support
 *   SD Card support
 *   SD Card folders (works in pronterface)
+*   SD Card autostart support
 *   LCD support (ideally 20x4) 
 *   LCD menu system for autonomous SD card printing, controlled by an click-encoder. 
 *   EEPROM storage of e.g. max-velocity, max-acceleration, and similar variables
@@ -42,6 +43,8 @@ Features:
 *   Endstop trigger reporting to the host software.
 *   Updated sdcardlib
 *   Heater power reporting. Useful for PID monitoring.
+*   PID tuning
+*   CoreXY kinematics (www.corexy.com/theory.html)
 
 The default baudrate is 250000. This baudrate has less jitter and hence errors than the usual 115200 baud, but is less supported by drivers and host-environments.
 
@@ -99,6 +102,11 @@ If you have an SD card reader attached to your controller, also folders work now
 You can write to file in a subfolder by specifying a similar text using small letters in the path.
 Also, backup copies of various operating systems are hidden, as well as files not ending with ".g".
 
+*SD card folders:*
+
+If you place a file auto[0-9].g into the root of the sd card, it will be automatically executed if you boot the printer. The same file will be executed by selecting "Autostart" from the menu.
+First *0 will be performed, than *1 and so on. That way, you can heat up or even print automatically without user interaction.
+
 *Endstop trigger reporting:*
 
 If an endstop is hit while moving towards the endstop, the location at which the firmware thinks that the endstop was triggered is outputed on the serial port.
@@ -144,21 +152,33 @@ Movement variables:
 *   M202 - Set max acceleration in units/s^2 for travel moves (M202 X1000 Y1000) Unused in Marlin!!
 *   M203 - Set maximum feedrate that your machine can sustain (M203 X200 Y200 Z300 E10000) in mm/sec
 *   M204 - Set default acceleration: S normal moves T filament only moves (M204 S3000 T7000) im mm/sec^2  also sets minimum segment time in ms (B20000) to prevent buffer underruns and M20 minimum feedrate
+*   M206 - set home offsets.  This sets the X,Y,Z coordinates of the endstops (and is added to the {X,Y,Z}_HOME_POS configuration options (and is also added to the coordinates, if any, provided to G82, as with earlier firmware)
 *   M220 - set build speed mulitplying S:factor in percent ; aka "realtime tuneing in the gcode". So you can slow down if you have islands in one height-range, and speed up otherwise.
-*   M301 - Set PID parameters P I and D
+*   M221 - set the extrude multiplying S:factor in percent
 *   M400 - Finish all buffered moves.
+
+Temperature variables:
+*   M301 - Set PID parameters P I and D
+*   M302 - Allow cold extrudes
+*   M303 - PID relay autotune S<temperature> sets the target temperature. (default target temperature = 150C)
 
 Advance:
 
 *   M200 - Set filament diameter for advance
-*   M205 -  advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
+*   M205 - advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
 
 EEPROM:
 
-*   M500 - stores paramters in EEPROM
+*   M500 - stores paramters in EEPROM. This parameters are stored:  axis_steps_per_unit,  max_feedrate, max_acceleration  ,acceleration,retract_acceleration,
+  minimumfeedrate,mintravelfeedrate,minsegmenttime,  jerk velocities, PID
 *   M501 - reads parameters from EEPROM (if you need reset them after you changed them temporarily).  
 *   M502 - reverts to the default "factory settings".  You still need to store them in EEPROM afterwards if you want to.
+*   M503 - print the current settings (from memory not from eeprom)
 
+MISC:
+
+*   M240 - Trigger a camera to take a photograph
+*   M999 - Restart after being stopped by error
 
 Configuring and compilation:
 ============================

@@ -95,17 +95,6 @@ static unsigned long  previous_millis_bed_heater;
   static int maxttemp[EXTRUDERS] = { 16383 }; // the first value used for all
   static int bed_minttemp = 0;
   static int bed_maxttemp = 16383;
-  static int heater_pin_map[EXTRUDERS] = { HEATER_0_PIN
-#if EXTRUDERS > 1
-                                         , HEATER_1_PIN
-#endif
-#if EXTRUDERS > 2
-                                         , HEATER_2_PIN
-#endif
-#if EXTRUDERS > 3
-  #error Unsupported number of extruders
-#endif
-  };
   static void *heater_ttbl_map[EXTRUDERS] = { (void *)heater_0_temptable
 #if EXTRUDERS > 1
                                             , (void *)heater_1_temptable
@@ -138,7 +127,6 @@ void PID_autotune(float temp)
   float input;
   int cycles=0;
   bool heating = true;
-  soft_pwm[0] = 255>>1;
 
   unsigned long temp_millis = millis();
   unsigned long t1=temp_millis;
@@ -146,14 +134,18 @@ void PID_autotune(float temp)
   long t_high;
   long t_low;
 
-  long bias=127;
-  long d = 127;
+  long bias=PID_MAX/2;
+  long d = PID_MAX/2;
   float Ku, Tu;
   float Kp, Ki, Kd;
   float max, min;
   
   SERIAL_ECHOLN("PID Autotune start");
-
+  
+  disable_heater(); // switch off all heaters.
+  
+  soft_pwm[0] = PID_MAX/2;
+    
   for(;;) {
 
     if(temp_meas_ready == true) { // temp sample ready
@@ -180,8 +172,8 @@ void PID_autotune(float temp)
           t_low=t2 - t1;
           if(cycles > 0) {
             bias += (d*(t_high - t_low))/(t_low + t_high);
-            bias = constrain(bias, 20 ,235);
-            if(bias > 127) d = 254 - bias;
+            bias = constrain(bias, 20 ,PID_MAX-20);
+            if(bias > PID_MAX/2) d = PID_MAX - 1 - bias;
             else d = bias;
 
             SERIAL_PROTOCOLPGM(" bias: "); SERIAL_PROTOCOL(bias);
@@ -200,6 +192,7 @@ void PID_autotune(float temp)
               SERIAL_PROTOCOLPGM(" Kp: "); SERIAL_PROTOCOLLN(Kp);
               SERIAL_PROTOCOLPGM(" Ki: "); SERIAL_PROTOCOLLN(Ki);
               SERIAL_PROTOCOLPGM(" Kd: "); SERIAL_PROTOCOLLN(Kd);
+              /*
               Kp = 0.33*Ku;
               Ki = Kp/Tu;
               Kd = Kp*Tu/3;
@@ -214,6 +207,7 @@ void PID_autotune(float temp)
               SERIAL_PROTOCOLPGM(" Kp: "); SERIAL_PROTOCOLLN(Kp);
               SERIAL_PROTOCOLPGM(" Ki: "); SERIAL_PROTOCOLLN(Ki);
               SERIAL_PROTOCOLPGM(" Kd: "); SERIAL_PROTOCOLLN(Kd);
+              */
             }
           }
           soft_pwm[0] = (bias + d) >> 1;
@@ -223,7 +217,7 @@ void PID_autotune(float temp)
       } 
     }
     if(input > (temp + 20)) {
-      SERIAL_PROTOCOLLNPGM("PID Autotune failed !, Temperature to high");
+      SERIAL_PROTOCOLLNPGM("PID Autotune failed! Temperature to high");
       return;
     }
     if(millis() - temp_millis > 2000) {
@@ -232,6 +226,14 @@ void PID_autotune(float temp)
       SERIAL_PROTOCOL(degHotend(0));   
       SERIAL_PROTOCOLPGM(" @:");
       SERIAL_PROTOCOLLN(getHeaterPower(0));       
+    }
+    if(((millis() - t1) + (millis() - t2)) > (10L*60L*1000L*2L)) {
+      SERIAL_PROTOCOLLNPGM("PID Autotune failed! timeout");
+      return;
+    }
+    if(cycles > 5) {
+      SERIAL_PROTOCOLLNPGM("PID Autotune finished ! Place the Kp, Ki and Kd constants in the configuration.h");
+      return;
     }
     LCD_STATUS;
   }
@@ -252,6 +254,11 @@ int getHeaterPower(int heater) {
 
 void manage_heater()
 {
+#ifdef HEATER_BED_DUTY_CYCLE_DIVIDER
+  static int bed_needs_heating=0;
+  static int bed_is_on=0;
+#endif
+
   #ifdef USE_WATCHDOG
     wd_reset();
   #endif
@@ -311,11 +318,9 @@ void manage_heater()
     // Check if temperature is within the correct range
     if((current_raw[e] > minttemp[e]) && (current_raw[e] < maxttemp[e])) 
     {
-      //analogWrite(heater_pin_map[e], pid_output);
       soft_pwm[e] = (int)pid_output >> 1;
     }
     else {
-      //analogWrite(heater_pin_map[e], 0);
       soft_pwm[e] = 0;
     }
   } // End extruder for loop
@@ -333,12 +338,26 @@ void manage_heater()
     }
   #endif
   
+#ifdef HEATER_BED_DUTY_CYCLE_DIVIDER
+  if (bed_needs_heating){
+    if (bed_is_on==0)
+        WRITE(HEATER_BED_PIN,HIGH);
+    if (bed_is_on==1)
+        WRITE(HEATER_BED_PIN,LOW);
+    bed_is_on=(bed_is_on+1) % HEATER_BED_DUTY_CYCLE_DIVIDER;
+  }
+#endif
+
   if(millis() - previous_millis_bed_heater < BED_CHECK_INTERVAL)
     return;
   previous_millis_bed_heater = millis();
   
   #if TEMP_BED_PIN > -1
   
+    #ifdef HEATER_BED_DUTY_CYCLE_DIVIDER
+    bed_needs_heating=0;
+    #endif
+
     #ifndef BED_LIMIT_SWITCHING
       // Check if temperature is within the correct range
       if((current_raw_bed > bed_minttemp) && (current_raw_bed < bed_maxttemp)) {
@@ -348,6 +367,9 @@ void manage_heater()
         }
         else 
         {
+          #ifdef HEATER_BED_DUTY_CYCLE_DIVIDER
+          bed_needs_heating=1;
+          #endif
           WRITE(HEATER_BED_PIN,HIGH);
         }
       }
@@ -364,6 +386,9 @@ void manage_heater()
         else 
           if(current_raw_bed <= target_bed_low_temp)
         {
+          #ifdef HEATER_BED_DUTY_CYCLE_DIVIDER
+          bed_needs_heating=1;
+          #endif
           WRITE(HEATER_BED_PIN,HIGH);
         }
       }
@@ -559,6 +584,9 @@ void tp_init()
   #endif  
   #if (FAN_PIN > -1) 
     SET_OUTPUT(FAN_PIN);
+    #ifdef FAST_PWM_FAN
+    setPwmFrequency(FAN_PIN, 1); // No prescaling. Pwm frequency = F_CPU/256/8
+    #endif
   #endif  
 
   #ifdef HEATER_0_USES_MAX6675
@@ -678,7 +706,7 @@ void disable_heater()
   target_raw[0]=0;
   soft_pwm[0]=0;
    #if HEATER_0_PIN > -1  
-     digitalWrite(HEATER_0_PIN,LOW);
+     WRITE(HEATER_0_PIN,LOW);
    #endif
   #endif
      
@@ -686,7 +714,7 @@ void disable_heater()
     target_raw[1]=0;
     soft_pwm[1]=0;
     #if HEATER_1_PIN > -1 
-      digitalWrite(HEATER_1_PIN,LOW);
+      WRITE(HEATER_1_PIN,LOW);
     #endif
   #endif
       
@@ -694,38 +722,40 @@ void disable_heater()
     target_raw[2]=0;
     soft_pwm[2]=0;
     #if HEATER_2_PIN > -1  
-      digitalWrite(HEATER_2_PIN,LOW);
+      WRITE(HEATER_2_PIN,LOW);
     #endif
   #endif 
 
   #if TEMP_BED_PIN > -1
     target_raw_bed=0;
     #if HEATER_BED_PIN > -1  
-      digitalWrite(HEATER_BED_PIN,LOW);
+      WRITE(HEATER_BED_PIN,LOW);
     #endif
   #endif 
 }
 
 void max_temp_error(uint8_t e) {
-  digitalWrite(heater_pin_map[e], 0);
+  disable_heater();
   if(IsStopped() == false) {
     SERIAL_ERROR_START;
-    SERIAL_ERRORLN(e);
+    SERIAL_ERRORLN((int)e);
     SERIAL_ERRORLNPGM(": Extruder switched off. MAXTEMP triggered !");
   }
 }
 
 void min_temp_error(uint8_t e) {
-  digitalWrite(heater_pin_map[e], 0);
+  disable_heater();
   if(IsStopped() == false) {
     SERIAL_ERROR_START;
-    SERIAL_ERRORLN(e);
+    SERIAL_ERRORLN((int)e);
     SERIAL_ERRORLNPGM(": Extruder switched off. MINTEMP triggered !");
   }
 }
 
 void bed_max_temp_error(void) {
-  digitalWrite(HEATER_BED_PIN, 0);
+#if HEATER_BED_PIN > -1
+  WRITE(HEATER_BED_PIN, 0);
+#endif
   if(IsStopped() == false) {
     SERIAL_ERROR_START;
     SERIAL_ERRORLNPGM("Temperature heated bed switched off. MAXTEMP triggered !!");
@@ -921,14 +951,14 @@ ISR(TIMER0_COMPB_vect)
     
   if(temp_count >= 16) // 8 ms * 16 = 128ms.
   {
-    #ifdef HEATER_0_USES_AD595
+    #if defined(HEATER_0_USES_AD595) || defined(HEATER_0_USES_MAX6675)
       current_raw[0] = raw_temp_0_value;
     #else
       current_raw[0] = 16383 - raw_temp_0_value;
     #endif
 
 #if EXTRUDERS > 1    
-    #ifdef HEATER_1_USES_AD595 || defined HEATER_0_USES_MAX6675
+    #ifdef HEATER_1_USES_AD595
       current_raw[1] = raw_temp_1_value;
     #else
       current_raw[1] = 16383 - raw_temp_1_value;
